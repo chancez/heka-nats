@@ -44,7 +44,7 @@ type NatsInput struct {
 	DecoderName string `toml:"decoder"`
 	decoderChan chan *pipeline.PipelinePack
 	runner      pipeline.InputRunner
-	stop        chan struct{}
+	stop        chan error
 }
 
 func (input *NatsInput) ConfigStruct() interface{} {
@@ -55,8 +55,8 @@ func (input *NatsInput) ConfigStruct() interface{} {
 
 func (input *NatsInput) Init(config interface{}) error {
 	conf := config.(*NatsInputConfig)
-	input.stop = make(chan struct{})
 	input.NatsInputConfig = conf
+	input.stop = make(chan error)
 	options := &nats.Options{
 		Url:            conf.Url,
 		Servers:        conf.Servers,
@@ -70,6 +70,9 @@ func (input *NatsInput) Init(config interface{}) error {
 	}
 	if conf.Timeout > 0 {
 		options.Timeout = time.Duration(conf.Timeout) * time.Millisecond
+	}
+	options.ClosedCB = func(c *nats.Conn) {
+		// input.stop <- errors.New("Connection Closed.")
 	}
 	input.Options = options
 	return nil
@@ -113,10 +116,9 @@ func (input *NatsInput) Run(runner pipeline.InputRunner,
 		input.sendPack(pack)
 	})
 
-	// Wait for the channel to be closed
-	<-input.stop
-
-	return nil
+	// Wait for the channel to be closed, or recieve an error
+	err, _ = <-input.stop
+	return err
 }
 
 func (input *NatsInput) Stop() {
