@@ -39,6 +39,7 @@ type NatsOutput struct {
 	*NatsOutputConfig
 	Conn    *nats.Conn
 	Options *nats.Options
+	stop    chan error
 }
 
 func (output *NatsOutput) ConfigStruct() interface{} {
@@ -48,6 +49,7 @@ func (output *NatsOutput) ConfigStruct() interface{} {
 func (output *NatsOutput) Init(config interface{}) error {
 	conf := config.(*NatsOutputConfig)
 	output.NatsOutputConfig = conf
+	output.stop = make(chan error, 1)
 	options := &nats.Options{
 		Url:            conf.Url,
 		Servers:        conf.Servers,
@@ -62,12 +64,16 @@ func (output *NatsOutput) Init(config interface{}) error {
 	if conf.Timeout > 0 {
 		options.Timeout = time.Duration(conf.Timeout) * time.Millisecond
 	}
+	options.ClosedCB = func(c *nats.Conn) {
+		output.stop <- errors.New("Connection Closed.")
+	}
 	output.Options = options
 	return nil
 }
 
 func (output *NatsOutput) Run(runner pipeline.OutputRunner,
 	helper pipeline.PluginHelper) (err error) {
+	defer close(output.stop)
 	if runner.Encoder() == nil {
 		return errors.New("Encoder required.")
 	}
@@ -82,19 +88,29 @@ func (output *NatsOutput) Run(runner pipeline.OutputRunner,
 		pack     *pipeline.PipelinePack
 		outgoing []byte
 	)
-	inChan := runner.InChan()
 
-	for pack = range inChan {
-		outgoing, err = runner.Encode(pack)
-		if err != nil {
-			runner.LogError(err)
-			continue
+	inChan := runner.InChan()
+	ok := true
+
+	for ok {
+		select {
+		case pack, ok = <-inChan:
+			if !ok {
+				return
+			}
+			outgoing, err = runner.Encode(pack)
+			if err != nil {
+				runner.LogError(err)
+				continue
+			}
+			err = output.Conn.Publish(output.Subject, outgoing)
+			if err != nil {
+				runner.LogError(err)
+			}
+			pack.Recycle()
+		case err = <-output.stop:
+			return err
 		}
-		err = output.Conn.Publish(output.Subject, outgoing)
-		if err != nil {
-			runner.LogError(err)
-		}
-		pack.Recycle()
 	}
 
 	return nil
