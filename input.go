@@ -35,6 +35,7 @@ type NatsInputConfig struct {
 	// Timeout in Milliseconds
 	Timeout     uint32 `toml:"timeout"`
 	DecoderName string `toml:"decoder"`
+	UseMsgBytes bool   `toml:"usg_msgbytes"`
 }
 
 type NatsInput struct {
@@ -95,6 +96,21 @@ func (input *NatsInput) Run(runner pipeline.InputRunner,
 			fmt.Sprintf("%s-%s", runner.Name(), input.DecoderName)); !ok {
 			return fmt.Errorf("Decoder not found: %s", input.DecoderName)
 		}
+		// We want to know what kind of decoder is being used, but we only care
+		// if they're using a protobuf decoder, or a multidecoder with a
+		// protobuf decoder as the first sub decoder
+		decoder := dRunner.Decoder()
+		switch decoder.(type) {
+		case *pipeline.ProtobufDecoder:
+			input.UseMsgBytes = true
+		case *pipeline.MultiDecoder:
+			d := decoder.(*pipeline.MultiDecoder)
+			if len(d.Decoders) > 0 {
+				if _, ok := d.Decoders[0].(*pipeline.ProtobufDecoder); ok {
+					input.UseMsgBytes = true
+				}
+			}
+		}
 		input.decoderChan = dRunner.InChan()
 	}
 	input.runner = runner
@@ -112,12 +128,18 @@ func (input *NatsInput) Run(runner pipeline.InputRunner,
 
 	input.Conn.Subscribe(input.Subject, func(msg *nats.Msg) {
 		pack = <-packSupply
-		pack.Message.SetUuid(uuid.NewRandom())
-		pack.Message.SetTimestamp(time.Now().UnixNano())
-		pack.Message.SetType("nats.input")
-		pack.Message.SetHostname(hostname)
-		pack.Message.SetPayload(string(msg.Data))
-		message.NewStringField(pack.Message, "subject", msg.Subject)
+		// If we're using protobuf, then the entire message is in the
+		// nats message body
+		if input.UseMsgBytes {
+			pack.MsgBytes = msg.Data
+		} else {
+			pack.Message.SetUuid(uuid.NewRandom())
+			pack.Message.SetTimestamp(time.Now().UnixNano())
+			pack.Message.SetType("nats.input")
+			pack.Message.SetHostname(hostname)
+			pack.Message.SetPayload(string(msg.Data))
+			message.NewStringField(pack.Message, "subject", msg.Subject)
+		}
 		input.sendPack(pack)
 	})
 

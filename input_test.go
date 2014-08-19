@@ -6,6 +6,7 @@ import (
 	"github.com/mozilla-services/heka/pipeline"
 	pipeline_ts "github.com/mozilla-services/heka/pipeline/testsupport"
 	"github.com/mozilla-services/heka/pipelinemock"
+	"github.com/mozilla-services/heka/plugins"
 	plugins_ts "github.com/mozilla-services/heka/plugins/testsupport"
 	"github.com/rafrombrc/gomock/gomock"
 	gs "github.com/rafrombrc/gospec/src/gospec"
@@ -75,8 +76,11 @@ func NatsInputSpec(c gs.Context) {
 				c.Specify("injects messages into the decoder when configured", func() {
 					decoderName := "ScribbleDecoder"
 					config.DecoderName = decoderName
+					decoder := new(plugins.ScribbleDecoder)
+					decoder.Init(&plugins.ScribbleDecoderConfig{})
 
 					mockDecoderRunner := pipelinemock.NewMockDecoderRunner(ctrl)
+					mockDecoderRunner.EXPECT().Decoder().Return(decoder)
 					mockDecoderRunner.EXPECT().InChan().Return(retPackChan)
 					ith.MockHelper.EXPECT().DecoderRunner(decoderName,
 						fmt.Sprintf("%s-%s", inputName, decoderName),
