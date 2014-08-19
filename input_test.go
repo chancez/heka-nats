@@ -72,16 +72,17 @@ func NatsInputSpec(c gs.Context) {
 
 			startInput()
 
-			msg := &nats.Msg{
-				Subject: config.Subject,
-				Data:    []byte("test message"),
-			}
+			c.Specify("gets messages its subscribed to", func() {
+				msg := &nats.Msg{
+					Subject: config.Subject,
+					Data:    []byte("test message"),
+				}
 
-			mockConn.msgs <- msg
+				mockConn.msgs <- msg
+				pack := <-retPackChan
 
-			pack := <-retPackChan
-
-			c.Expect(pack.Message.GetPayload(), gs.Equals, string(msg.Data))
+				c.Expect(pack.Message.GetPayload(), gs.Equals, string(msg.Data))
+			})
 
 			input.Stop()
 			wg.Wait()
