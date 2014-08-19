@@ -9,7 +9,10 @@ type mockConnection struct {
 }
 
 func (conn *mockConnection) Publish(subject string, data []byte) error {
-
+	conn.msgs <- &nats.Msg{
+		Subject: subject,
+		Data:    data,
+	}
 	return nil
 }
 

@@ -37,9 +37,10 @@ type NatsOutputConfig struct {
 
 type NatsOutput struct {
 	*NatsOutputConfig
-	Conn    Connection
-	Options *nats.Options
-	stop    chan error
+	Conn          Connection
+	Options       *nats.Options
+	stop          chan error
+	newConnection func(*nats.Options) (Connection, error)
 }
 
 func (output *NatsOutput) ConfigStruct() interface{} {
@@ -68,6 +69,9 @@ func (output *NatsOutput) Init(config interface{}) error {
 		output.stop <- errors.New("Connection Closed.")
 	}
 	output.Options = options
+	if output.newConnection == nil {
+		output.newConnection = defaultConnectionProvider
+	}
 	return nil
 }
 
@@ -78,7 +82,7 @@ func (output *NatsOutput) Run(runner pipeline.OutputRunner,
 		return errors.New("Encoder required.")
 	}
 
-	output.Conn, err = output.Options.Connect()
+	output.Conn, err = output.newConnection(output.Options)
 	if err != nil {
 		return
 	}
