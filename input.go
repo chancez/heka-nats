@@ -39,12 +39,12 @@ type NatsInputConfig struct {
 
 type NatsInput struct {
 	*NatsInputConfig
-	Conn        *nats.Conn
-	Options     *nats.Options
-	DecoderName string `toml:"decoder"`
-	decoderChan chan *pipeline.PipelinePack
-	runner      pipeline.InputRunner
-	stop        chan error
+	Conn               Connection
+	Options            *nats.Options
+	decoderChan        chan *pipeline.PipelinePack
+	runner             pipeline.InputRunner
+	stop               chan error
+	connectionProvider func(*nats.Options) (Connection, error)
 }
 
 func (input *NatsInput) ConfigStruct() interface{} {
@@ -75,6 +75,9 @@ func (input *NatsInput) Init(config interface{}) error {
 		// input.stop <- errors.New("Connection Closed.")
 	}
 	input.Options = options
+	if input.connectionProvider == nil {
+		input.connectionProvider = defaultConnectionProvider
+	}
 	return nil
 }
 
@@ -99,7 +102,9 @@ func (input *NatsInput) Run(runner pipeline.InputRunner,
 	hostname := helper.PipelineConfig().Hostname()
 	packSupply := runner.InChan()
 
-	input.Conn, err = input.Options.Connect()
+	// input.Conn, err = input.Options.Connect()
+	input.Conn, err = input.connectionProvider(input.Options)
+
 	if err != nil {
 		return
 	}
@@ -137,4 +142,8 @@ func init() {
 	pipeline.RegisterPlugin("NatsInput", func() interface{} {
 		return new(NatsInput)
 	})
+}
+
+func defaultConnectionProvider(opts *nats.Options) (Connection, error) {
+	return opts.Connect()
 }

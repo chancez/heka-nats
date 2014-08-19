@@ -37,7 +37,7 @@ type NatsOutputConfig struct {
 
 type NatsOutput struct {
 	*NatsOutputConfig
-	Conn    *nats.Conn
+	Conn    Connection
 	Options *nats.Options
 	stop    chan error
 }
