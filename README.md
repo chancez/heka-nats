@@ -11,10 +11,11 @@ git_clone(https://github.com/apcera/nats 1929bb9e89d4956fa98ca93ee8f15a7852532e6
 add_external_plugin(git https://github.com/ecnahc515/heka-nats master)
 ````
 
-Refer to Heka's offical [Building External Plugins] docs for more details.
+Refer to Heka's offical [Building External Plugins]
+(http://hekad.readthedocs.org/en/latest/installing.html#build-include-externals)
+ docs for more details.
 
 
-[Building Externals Plugins]: (http://hekad.readthedocs.org/en/latest/installing.html#build-include-externals)
 
 
 Configuration
