@@ -39,12 +39,12 @@ type NatsInputConfig struct {
 
 type NatsInput struct {
 	*NatsInputConfig
-	Conn               Connection
-	Options            *nats.Options
-	decoderChan        chan *pipeline.PipelinePack
-	runner             pipeline.InputRunner
-	stop               chan error
-	connectionProvider func(*nats.Options) (Connection, error)
+	Conn          Connection
+	Options       *nats.Options
+	decoderChan   chan *pipeline.PipelinePack
+	runner        pipeline.InputRunner
+	stop          chan error
+	newConnection func(*nats.Options) (Connection, error)
 }
 
 func (input *NatsInput) ConfigStruct() interface{} {
@@ -75,8 +75,8 @@ func (input *NatsInput) Init(config interface{}) error {
 		// input.stop <- errors.New("Connection Closed.")
 	}
 	input.Options = options
-	if input.connectionProvider == nil {
-		input.connectionProvider = defaultConnectionProvider
+	if input.newConnection == nil {
+		input.newConnection = defaultConnectionProvider
 	}
 	return nil
 }
@@ -103,7 +103,7 @@ func (input *NatsInput) Run(runner pipeline.InputRunner,
 	packSupply := runner.InChan()
 
 	// input.Conn, err = input.Options.Connect()
-	input.Conn, err = input.connectionProvider(input.Options)
+	input.Conn, err = input.newConnection(input.Options)
 
 	if err != nil {
 		return

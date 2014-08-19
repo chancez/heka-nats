@@ -49,7 +49,7 @@ func NatsInputSpec(c gs.Context) {
 		mockConn := new(mockConnection)
 		mockConn.msgs = make(chan *nats.Msg, 1)
 		defer close(mockConn.msgs)
-		input.connectionProvider = func(opts *nats.Options) (Connection, error) {
+		input.newConnection = func(opts *nats.Options) (Connection, error) {
 			return mockConn, nil
 		}
 
