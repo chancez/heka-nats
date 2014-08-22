@@ -35,7 +35,7 @@ type NatsInputConfig struct {
 	// Timeout in Milliseconds
 	Timeout     uint32 `toml:"timeout"`
 	DecoderName string `toml:"decoder"`
-	UseMsgBytes bool   `toml:"usg_msgbytes"`
+	UseMsgBytes *bool  `toml:"use_msgbytes"`
 }
 
 type NatsInput struct {
@@ -44,7 +44,7 @@ type NatsInput struct {
 	Options       *nats.Options
 	decoderChan   chan *pipeline.PipelinePack
 	runner        pipeline.InputRunner
-	stop          chan error
+	stop          chan struct{}
 	newConnection func(*nats.Options) (Connection, error)
 }
 
@@ -57,7 +57,7 @@ func (input *NatsInput) ConfigStruct() interface{} {
 func (input *NatsInput) Init(config interface{}) error {
 	conf := config.(*NatsInputConfig)
 	input.NatsInputConfig = conf
-	input.stop = make(chan error)
+	input.stop = make(chan struct{}, 1)
 	options := &nats.Options{
 		Url:            conf.Url,
 		Servers:        conf.Servers,
@@ -73,7 +73,7 @@ func (input *NatsInput) Init(config interface{}) error {
 		options.Timeout = time.Duration(conf.Timeout) * time.Millisecond
 	}
 	options.ClosedCB = func(c *nats.Conn) {
-		// input.stop <- errors.New("Connection Closed.")
+		input.Stop()
 	}
 	input.Options = options
 	if input.newConnection == nil {
@@ -124,6 +124,7 @@ func (input *NatsInput) Run(runner pipeline.InputRunner,
 	if err != nil {
 		return
 	}
+	defer close(input.stop)
 	defer input.Conn.Close()
 
 	input.Conn.Subscribe(input.Subject, func(msg *nats.Msg) {
@@ -143,13 +144,15 @@ func (input *NatsInput) Run(runner pipeline.InputRunner,
 		input.sendPack(pack)
 	})
 
-	// Wait for the channel to be closed, or recieve an error
-	err, _ = <-input.stop
-	return err
+	// Wait for the channel to tell us to stop
+	<-input.stop
+	return nil
 }
 
 func (input *NatsInput) Stop() {
-	close(input.stop)
+	if input.stop != nil {
+		input.stop <- struct{}{}
+	}
 }
 
 func (input *NatsInput) sendPack(pack *pipeline.PipelinePack) {
