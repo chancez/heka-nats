@@ -46,12 +46,17 @@ type NatsInput struct {
 	runner        pipeline.InputRunner
 	stop          chan struct{}
 	newConnection func(*nats.Options) (Connection, error)
+	pConfig       *pipeline.PipelineConfig
 }
 
 func (input *NatsInput) ConfigStruct() interface{} {
 	return &NatsInputConfig{
 		Url: nats.DefaultURL,
 	}
+}
+
+func (input *NatsInput) SetPipelineConfig(pConfig *pipeline.PipelineConfig) {
+	input.pConfig = pConfig
 }
 
 func (input *NatsInput) Init(config interface{}) error {
@@ -86,39 +91,47 @@ func (input *NatsInput) Run(runner pipeline.InputRunner,
 	helper pipeline.PluginHelper) (err error) {
 
 	var (
-		pack    *pipeline.PipelinePack
-		dRunner pipeline.DecoderRunner
-		ok      bool
+		dRunner     pipeline.DecoderRunner
+		pack        *pipeline.PipelinePack
+		ok          bool
+		useMsgBytes bool
 	)
 
 	if input.DecoderName != "" {
-		if dRunner, ok = helper.DecoderRunner(input.DecoderName,
+		if dRunner, ok = input.pConfig.DecoderRunner(input.DecoderName,
 			fmt.Sprintf("%s-%s", runner.Name(), input.DecoderName)); !ok {
 			return fmt.Errorf("Decoder not found: %s", input.DecoderName)
 		}
-		// We want to know what kind of decoder is being used, but we only care
-		// if they're using a protobuf decoder, or a multidecoder with a
-		// protobuf decoder as the first sub decoder
-		decoder := dRunner.Decoder()
-		switch decoder.(type) {
-		case *pipeline.ProtobufDecoder:
-			input.UseMsgBytes = true
-		case *pipeline.MultiDecoder:
-			d := decoder.(*pipeline.MultiDecoder)
-			if len(d.Decoders) > 0 {
-				if _, ok := d.Decoders[0].(*pipeline.ProtobufDecoder); ok {
-					input.UseMsgBytes = true
+		input.decoderChan = dRunner.InChan()
+	}
+
+	if input.UseMsgBytes == nil {
+		// Only override if not already set
+		if dRunner != nil {
+			// We want to know what kind of decoder is being used, but we only
+			// care if they're using a protobuf decoder, or a multidecoder with
+			// a protobuf decoder as the first sub decoder
+			decoder := dRunner.Decoder()
+			switch decoder.(type) {
+			case *pipeline.ProtobufDecoder:
+				useMsgBytes = true
+			case *pipeline.MultiDecoder:
+				d := decoder.(*pipeline.MultiDecoder)
+				if len(d.Decoders) > 0 {
+					if _, ok := d.Decoders[0].(*pipeline.ProtobufDecoder); ok {
+						useMsgBytes = true
+					}
 				}
 			}
 		}
-		input.decoderChan = dRunner.InChan()
+		input.UseMsgBytes = &useMsgBytes
 	}
+
 	input.runner = runner
 
-	hostname := helper.PipelineConfig().Hostname()
+	hostname := input.pConfig.Hostname()
 	packSupply := runner.InChan()
 
-	// input.Conn, err = input.Options.Connect()
 	input.Conn, err = input.newConnection(input.Options)
 
 	if err != nil {
@@ -131,7 +144,7 @@ func (input *NatsInput) Run(runner pipeline.InputRunner,
 		pack = <-packSupply
 		// If we're using protobuf, then the entire message is in the
 		// nats message body
-		if input.UseMsgBytes {
+		if *input.UseMsgBytes {
 			pack.MsgBytes = msg.Data
 		} else {
 			pack.Message.SetUuid(uuid.NewRandom())
