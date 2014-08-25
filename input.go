@@ -84,34 +84,22 @@ func (input *NatsInput) Init(config interface{}) error {
 	if input.newConnection == nil {
 		input.newConnection = defaultConnectionProvider
 	}
-	return nil
-}
-
-func (input *NatsInput) Run(runner pipeline.InputRunner,
-	helper pipeline.PluginHelper) (err error) {
 
 	var (
-		dRunner     pipeline.DecoderRunner
-		pack        *pipeline.PipelinePack
-		ok          bool
 		useMsgBytes bool
+		ok          bool
+		decoder     pipeline.Decoder
 	)
-
-	if input.DecoderName != "" {
-		if dRunner, ok = input.pConfig.DecoderRunner(input.DecoderName,
-			fmt.Sprintf("%s-%s", runner.Name(), input.DecoderName)); !ok {
-			return fmt.Errorf("Decoder not found: %s", input.DecoderName)
-		}
-		input.decoderChan = dRunner.InChan()
-	}
 
 	if input.UseMsgBytes == nil {
 		// Only override if not already set
-		if dRunner != nil {
+		if conf.DecoderName != "" {
+			decoder, ok = input.pConfig.Decoder(conf.DecoderName)
+		}
+		if ok && decoder != nil {
 			// We want to know what kind of decoder is being used, but we only
 			// care if they're using a protobuf decoder, or a multidecoder with
 			// a protobuf decoder as the first sub decoder
-			decoder := dRunner.Decoder()
 			switch decoder.(type) {
 			case *pipeline.ProtobufDecoder:
 				useMsgBytes = true
@@ -127,6 +115,25 @@ func (input *NatsInput) Run(runner pipeline.InputRunner,
 		input.UseMsgBytes = &useMsgBytes
 	}
 
+	return nil
+}
+
+func (input *NatsInput) Run(runner pipeline.InputRunner,
+	helper pipeline.PluginHelper) (err error) {
+
+	var (
+		dRunner pipeline.DecoderRunner
+		pack    *pipeline.PipelinePack
+		ok      bool
+	)
+
+	if input.DecoderName != "" {
+		if dRunner, ok = input.pConfig.DecoderRunner(input.DecoderName,
+			fmt.Sprintf("%s-%s", runner.Name(), input.DecoderName)); !ok {
+			return fmt.Errorf("Decoder not found: %s", input.DecoderName)
+		}
+		input.decoderChan = dRunner.InChan()
+	}
 	input.runner = runner
 
 	hostname := input.pConfig.Hostname()
