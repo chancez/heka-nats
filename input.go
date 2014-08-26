@@ -144,8 +144,11 @@ func (input *NatsInput) Run(runner pipeline.InputRunner,
 	if err != nil {
 		return
 	}
-	defer close(input.stop)
-	defer input.Conn.Close()
+
+	defer func() {
+		close(input.stop)
+		input.Conn.Close()
+	}()
 
 	input.Conn.Subscribe(input.Subject, func(msg *nats.Msg) {
 		pack = <-packSupply
