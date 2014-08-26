@@ -1,10 +1,10 @@
 Heka-Nats
 =========
 
-This is a publish/subscribe input as well as a publish output, for [Heka](http://hekad.readthedocs.org/).
+This is a publish/subscribe output/input, for [Heka](http://hekad.readthedocs.org/).
 
-To use it, you need to first add it to build heka with it. You can do this by
-adding the following lines to `cmake/plugin_loader.cmake`:
+To use Heka-Nats, you need to build Heka with it. You can do this by adding the
+following lines to `cmake/plugin_loader.cmake`:
 
 ````
 git_clone(https://github.com/apcera/nats 1929bb9e89d4956fa98ca93ee8f15a7852532e64)
@@ -14,8 +14,6 @@ add_external_plugin(git https://github.com/ecnahc515/heka-nats master)
 Refer to Heka's offical [Building External Plugins]
 (http://hekad.readthedocs.org/en/latest/installing.html#build-include-externals)
  docs for more details.
-
-
 
 
 Configuration
@@ -45,6 +43,12 @@ reconnect attempts.
 * timeout (integer, optional): The time in milliseconds to wait before timing out.
 * decoder (string): The decoder name to transform a raw message body into a
 structured hekad message.
+* use_msgbytes (bool, optional): A true value here will cause a NatsInput to
+treat the Nats message body as a protobuf encoding of an entire Heka message, as
+opposed to just a message payload. Defaults to true if a ProtobufDecoder is in
+use, false otherwise. The default behavior will almost always be correct, you
+should only explicitly set this if you know how Heka's decoding works
+internally.
 
 NatsOuput
 ---------
