@@ -57,9 +57,9 @@ func NatsInputSpec(c gs.Context) {
 		inputName := "NatsInput"
 		ith.MockInputRunner.EXPECT().Name().Return(inputName).AnyTimes()
 		ith.MockInputRunner.EXPECT().InChan().Return(ith.PackSupply)
-		ith.MockHelper.EXPECT().PipelineConfig().Return(pConfig)
 
 		c.Specify("that is started", func() {
+			input.SetPipelineConfig(pConfig)
 			c.Specify("gets messages its subscribed to", func() {
 				c.Specify("injects messages into the pipeline when not configured with a decoder", func() {
 					ith.MockInputRunner.EXPECT().Inject(ith.Pack).Do(func(p *pipeline.PipelinePack) {
@@ -80,7 +80,6 @@ func NatsInputSpec(c gs.Context) {
 					decoder.Init(&plugins.ScribbleDecoderConfig{})
 
 					mockDecoderRunner := pipelinemock.NewMockDecoderRunner(ctrl)
-					mockDecoderRunner.EXPECT().Decoder().Return(decoder)
 					mockDecoderRunner.EXPECT().InChan().Return(retPackChan)
 					ith.MockHelper.EXPECT().DecoderRunner(decoderName,
 						fmt.Sprintf("%s-%s", inputName, decoderName),

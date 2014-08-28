@@ -128,7 +128,7 @@ func (input *NatsInput) Run(runner pipeline.InputRunner,
 	)
 
 	if input.DecoderName != "" {
-		if dRunner, ok = input.pConfig.DecoderRunner(input.DecoderName,
+		if dRunner, ok = helper.DecoderRunner(input.DecoderName,
 			fmt.Sprintf("%s-%s", runner.Name(), input.DecoderName)); !ok {
 			return fmt.Errorf("Decoder not found: %s", input.DecoderName)
 		}
@@ -146,7 +146,6 @@ func (input *NatsInput) Run(runner pipeline.InputRunner,
 	}
 
 	defer func() {
-		close(input.stop)
 		input.Conn.Close()
 	}()
 
@@ -174,7 +173,7 @@ func (input *NatsInput) Run(runner pipeline.InputRunner,
 
 func (input *NatsInput) Stop() {
 	if input.stop != nil {
-		input.stop <- struct{}{}
+		close(input.stop)
 	}
 }
 
